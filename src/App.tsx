@@ -472,6 +472,14 @@ export function App() {
   const handleRacingSync = (car: CarState) => {
     if (!isPassAndPlay && socket) {
       socket.emit('racing_sync', { car });
+    } else if (currentRoom) {
+      const st = { ...currentRoom.gameState };
+      st.p1Car = car;
+      if (car.lap >= (st.targetLaps || 3)) {
+        setCurrentRoom({ ...currentRoom, gameState: st, winner: 1, status: 'finished' });
+      } else {
+        setCurrentRoom({ ...currentRoom, gameState: st });
+      }
     }
   };
 
@@ -479,6 +487,33 @@ export function App() {
   const handleFightingAction = (action: any, dir?: number) => {
     if (!isPassAndPlay && socket) {
       socket.emit('fighting_action', { action, dir });
+    } else if (currentRoom) {
+      const st = { ...currentRoom.gameState };
+      if (action === 'move' && dir !== undefined) {
+        st.p1.x = Math.max(35, Math.min(565, st.p1.x + dir * 8));
+      } else if (action === 'jump') {
+        st.p1.y = 210;
+        setTimeout(() => {
+          if (currentRoom) {
+            const resetSt = { ...currentRoom.gameState };
+            resetSt.p1.y = 300;
+            setCurrentRoom({ ...currentRoom, gameState: resetSt });
+          }
+        }, 320);
+      } else if (action === 'attack') {
+        st.p2.health = Math.max(0, st.p2.health - 15);
+        if (st.p2.health <= 0) {
+          st.p1.roundsWon += 1;
+          if (st.p1.roundsWon >= (st.targetRounds || 2)) {
+            setCurrentRoom({ ...currentRoom, gameState: st, winner: 1, status: 'finished' });
+            return;
+          } else {
+            st.p1.health = 100;
+            st.p2.health = 100;
+          }
+        }
+      }
+      setCurrentRoom({ ...currentRoom, gameState: st });
     }
   };
 
