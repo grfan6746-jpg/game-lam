@@ -51,8 +51,8 @@ export interface TicTacToeState {
 // 2. Dots and Boxes
 export interface DotsBoxesState {
   gridSize: number; // 4 dots = 3x3 boxes
-  hLines: boolean[][]; // 4 rows x 3 cols
-  vLines: boolean[][]; // 3 rows x 4 cols
+  hLines: (number | null | boolean)[][]; // 4 rows x 3 cols: 1 for P1 Blue, 2 for P2 Red, null/false for none
+  vLines: (number | null | boolean)[][]; // 3 rows x 4 cols: 1 for P1 Blue, 2 for P2 Red, null/false for none
   boxes: (number | null)[][]; // 3x3: null, 1, 2
   currentTurn: 1 | 2;
   scores: { 1: number; 2: number };

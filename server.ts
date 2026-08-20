@@ -44,7 +44,7 @@ function generateRoomId(): string {
   return id;
 }
 
-function initGameState(gameType: GameType) {
+function initGameState(gameType: GameType, options?: { gridSize?: number }) {
   switch (gameType) {
     case 'tictactoe':
       return {
@@ -52,15 +52,18 @@ function initGameState(gameType: GameType) {
         currentTurn: 1,
         winningLine: null,
       };
-    case 'dotsboxes':
+    case 'dotsboxes': {
+      const numDots = Math.min(Math.max(options?.gridSize || 4, 4), 9);
+      const numBoxes = numDots - 1;
       return {
-        gridSize: 4, // 4x4 dots = 3x3 boxes
-        hLines: Array(4).fill(null).map(() => Array(3).fill(false)),
-        vLines: Array(3).fill(null).map(() => Array(4).fill(false)),
-        boxes: Array(3).fill(null).map(() => Array(3).fill(null)),
+        gridSize: numDots, // 4x4 up to 9x9 dots
+        hLines: Array(numDots).fill(null).map(() => Array(numBoxes).fill(null)),
+        vLines: Array(numBoxes).fill(null).map(() => Array(numDots).fill(null)),
+        boxes: Array(numBoxes).fill(null).map(() => Array(numBoxes).fill(null)),
         currentTurn: 1,
         scores: { 1: 0, 2: 0 },
       };
+    }
     case 'battleship':
       return {
         phase: 'placement',
@@ -445,7 +448,7 @@ io.on('connection', (socket: Socket) => {
       status: 'waiting',
       winner: null,
       rematchRequested: {},
-      gameState: initGameState(data.gameType),
+      gameState: initGameState(data.gameType, { gridSize: (data as any).gridSize }),
       createdAt: Date.now(),
       lastActive: Date.now(),
     };
@@ -539,8 +542,9 @@ io.on('connection', (socket: Socket) => {
     io.to(roomId).emit('rematch_update', room.rematchRequested);
 
     if (room.rematchRequested[1] && room.rematchRequested[2]) {
-      // Reset game
-      room.gameState = initGameState(room.gameType);
+      // Reset game with existing gridSize if applicable
+      const prevGridSize = room.gameState?.gridSize;
+      room.gameState = initGameState(room.gameType, { gridSize: prevGridSize });
       room.winner = null;
       room.status = 'playing';
       room.rematchRequested = {};
@@ -549,6 +553,23 @@ io.on('connection', (socket: Socket) => {
       });
       startRealtimeGameLoop(roomId);
     }
+  });
+
+  // Dots and Boxes Change Size (4x4 to 9x9)
+  socket.on('dots_set_size', (data: { size: number }) => {
+    const roomId = (socket as any).roomId;
+    const room = rooms[roomId];
+    if (!room || room.gameType !== 'dotsboxes') return;
+    const size = Math.min(Math.max(Number(data.size) || 4, 4), 9);
+    room.gameState = initGameState('dotsboxes', { gridSize: size });
+    room.winner = null;
+    room.status = 'playing';
+    room.rematchRequested = {};
+    io.to(roomId).emit('game_update', {
+      gameState: room.gameState,
+      winner: room.winner,
+      status: room.status,
+    });
   });
 
   // 1. Tic Tac Toe Move
@@ -614,22 +635,27 @@ io.on('connection', (socket: Socket) => {
     if (st.currentTurn !== playerNum) return;
 
     if (data.type === 'h') {
-      if (st.hLines[data.r][data.c]) return;
-      st.hLines[data.r][data.c] = true;
+      if (st.hLines[data.r]?.[data.c]) return;
+      if (!st.hLines[data.r]) st.hLines[data.r] = [];
+      st.hLines[data.r][data.c] = playerNum;
     } else {
-      if (st.vLines[data.r][data.c]) return;
-      st.vLines[data.r][data.c] = true;
+      if (st.vLines[data.r]?.[data.c]) return;
+      if (!st.vLines[data.r]) st.vLines[data.r] = [];
+      st.vLines[data.r][data.c] = playerNum;
     }
+
+    const numDots = st.gridSize || 4;
+    const numBoxes = numDots - 1;
 
     // Check newly completed boxes
     let completedAny = false;
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 3; c++) {
-        if (st.boxes[r][c] === null) {
-          const top = st.hLines[r][c];
-          const bottom = st.hLines[r + 1][c];
-          const left = st.vLines[r][c];
-          const right = st.vLines[r][c + 1];
+    for (let r = 0; r < numBoxes; r++) {
+      for (let c = 0; c < numBoxes; c++) {
+        if (st.boxes[r]?.[c] === null) {
+          const top = st.hLines[r]?.[c];
+          const bottom = st.hLines[r + 1]?.[c];
+          const left = st.vLines[r]?.[c];
+          const right = st.vLines[r]?.[c + 1];
           if (top && bottom && left && right) {
             st.boxes[r][c] = playerNum;
             st.scores[playerNum] += 1;
@@ -644,9 +670,10 @@ io.on('connection', (socket: Socket) => {
       st.currentTurn = playerNum === 1 ? 2 : 1;
     }
 
-    // Check game over (9 total boxes)
+    // Check game over
     const totalClaimed = st.scores[1] + st.scores[2];
-    if (totalClaimed >= 9) {
+    const totalBoxes = numBoxes * numBoxes;
+    if (totalClaimed >= totalBoxes) {
       room.status = 'finished';
       if (st.scores[1] > st.scores[2]) room.winner = 1;
       else if (st.scores[2] > st.scores[1]) room.winner = 2;

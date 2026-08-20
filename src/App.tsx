@@ -338,20 +338,45 @@ export function App() {
   };
 
   // 2. Dots and Boxes
+  const handleChangeDotsGridSize = (size: number) => {
+    if (!isPassAndPlay && socket) {
+      socket.emit('dots_set_size', { size });
+    } else if (currentRoom) {
+      const numDots = Math.min(Math.max(size, 4), 9);
+      const numBoxes = numDots - 1;
+      const st = {
+        gridSize: numDots,
+        hLines: Array(numDots).fill(null).map(() => Array(numBoxes).fill(null)),
+        vLines: Array(numBoxes).fill(null).map(() => Array(numDots).fill(null)),
+        boxes: Array(numBoxes).fill(null).map(() => Array(numBoxes).fill(null)),
+        currentTurn: 1 as const,
+        scores: { 1: 0, 2: 0 },
+      };
+      setCurrentRoom({ ...currentRoom, gameState: st, winner: null, status: 'playing' });
+    }
+  };
+
   const handleDotsMove = (type: 'h' | 'v', r: number, c: number) => {
     if (!isPassAndPlay && socket) {
       socket.emit('dots_move', { type, r, c });
     } else if (currentRoom) {
       const st = { ...currentRoom.gameState };
       const turn = st.currentTurn;
-      if (type === 'h') st.hLines[r][c] = true;
-      else st.vLines[r][c] = true;
+      if (type === 'h') st.hLines[r][c] = turn;
+      else st.vLines[r][c] = turn;
+
+      const numDots = st.gridSize || 4;
+      const numBoxes = numDots - 1;
 
       let completedAny = false;
-      for (let br = 0; br < 3; br++) {
-        for (let bc = 0; bc < 3; bc++) {
-          if (st.boxes[br][bc] === null) {
-            if (st.hLines[br][bc] && st.hLines[br + 1][bc] && st.vLines[br][bc] && st.vLines[br][bc + 1]) {
+      for (let br = 0; br < numBoxes; br++) {
+        for (let bc = 0; bc < numBoxes; bc++) {
+          if (st.boxes[br]?.[bc] === null) {
+            const top = st.hLines[br]?.[bc];
+            const bottom = st.hLines[br + 1]?.[bc];
+            const left = st.vLines[br]?.[bc];
+            const right = st.vLines[br]?.[bc + 1];
+            if (top && bottom && left && right) {
               st.boxes[br][bc] = turn;
               st.scores[turn] += 1;
               completedAny = true;
@@ -364,9 +389,11 @@ export function App() {
         st.currentTurn = turn === 1 ? 2 : 1;
       }
 
+      const totalClaimed = st.scores[1] + st.scores[2];
+      const totalBoxes = numBoxes * numBoxes;
       let winner = currentRoom.winner;
       let status = currentRoom.status;
-      if (st.scores[1] + st.scores[2] >= 9) {
+      if (totalClaimed >= totalBoxes) {
         status = 'finished';
         winner = st.scores[1] > st.scores[2] ? 1 : st.scores[2] > st.scores[1] ? 2 : 'draw';
       }
@@ -525,6 +552,7 @@ export function App() {
                 state={currentRoom.gameState}
                 playerNum={playerNum}
                 onMove={handleDotsMove}
+                onChangeGridSize={handleChangeDotsGridSize}
                 disabled={!isPassAndPlay && (currentRoom.gameState?.currentTurn !== playerNum || currentRoom.status === 'finished')}
               />
             )}

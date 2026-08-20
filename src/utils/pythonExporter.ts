@@ -67,15 +67,17 @@ def generate_room_id():
     chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     return ''.join(random.choices(chars, k=5))
 
-def create_game_state(game_type):
+def create_game_state(game_type, size=4):
     if game_type == 'tictactoe':
         return {'board': [None] * 9, 'currentTurn': 1, 'winningLine': None}
     elif game_type == 'dotsboxes':
+        grid_size = max(4, min(int(size or 4), 9))
+        num_boxes = grid_size - 1
         return {
-            'gridSize': 4,
-            'hLines': [[False]*3 for _ in range(4)],
-            'vLines': [[False]*4 for _ in range(3)],
-            'boxes': [[None]*3 for _ in range(3)],
+            'gridSize': grid_size,
+            'hLines': [[None]*num_boxes for _ in range(grid_size)],
+            'vLines': [[None]*grid_size for _ in range(num_boxes)],
+            'boxes': [[None]*num_boxes for _ in range(num_boxes)],
             'currentTurn': 1,
             'scores': {'1': 0, '2': 0}
         }
@@ -336,7 +338,45 @@ EMBEDDED_HTML = """<!DOCTYPE html>
       } else if (t === 'connectfour') {
         c.innerHTML = \`<div class="flex flex-col items-center space-y-3"><div class="grid grid-cols-7 gap-2">\${[0,1,2,3,4,5,6].map(col => \`<button onclick="socket.emit('connectfour_drop', { roomId: currentRoom.id, col: \${col}, playerNum: myPlayerNum })" \${!myTurn || st.grid[0][col] !== null ? 'disabled' : ''} class="h-10 w-10 rounded-xl bg-slate-800 text-cyan-400 font-bold border border-slate-700">↓</button>\`).join('')}</div><div class="grid grid-cols-7 gap-2 bg-blue-950/80 p-4 rounded-3xl border-4 border-blue-600">\${st.grid.map(row => row.map(cell => \`<div class="h-11 w-11 rounded-full \${cell === 1 ? 'bg-rose-500' : (cell === 2 ? 'bg-yellow-400' : 'bg-slate-950')}"></div>\`).join('')).join('')}</div></div>\`;
       } else if (t === 'dotsboxes') {
-        c.innerHTML = \`<div class="flex flex-col items-center space-y-3"><div class="flex gap-6 bg-slate-950 px-5 py-2 rounded-2xl border border-slate-800 text-xs font-mono"><span class="text-cyan-400">P1: \${st.scores['1']}</span><span class="text-rose-400">P2: \${st.scores['2']}</span></div><div class="bg-slate-950 p-5 rounded-3xl border-2 border-slate-800">\${[0,1,2,3].map(r => \`<div class="flex items-center">\${[0,1,2,3].map(col => \`<div class="h-4 w-4 rounded-full bg-slate-300"></div>\${col < 3 ? \`<button onclick="socket.emit('dots_move', { roomId: currentRoom.id, type: 'h', r: \${r}, c: \${col}, playerNum: myPlayerNum })" class="h-3 w-16 mx-0.5 rounded-full \${st.hLines[r][col] ? 'bg-cyan-400' : 'bg-slate-800'}"></button>\` : ''}\`).join('')}</div>\${r < 3 ? \`<div class="flex items-center my-0.5">\${[0,1,2,3].map(col => \`<button onclick="socket.emit('dots_move', { roomId: currentRoom.id, type: 'v', r: \${r}, c: \${col}, playerNum: myPlayerNum })" class="w-3 h-16 rounded-full \${st.vLines[r][col] ? 'bg-cyan-400' : 'bg-slate-800'}"></button>\${col < 3 ? \`<div class="h-16 w-16 rounded-xl mx-0.5 flex items-center justify-center font-black \${st.boxes[r][col] === 1 ? 'bg-cyan-500/30 text-cyan-300' : (st.boxes[r][col] === 2 ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-900/30')}">\${st.boxes[r][col] ? 'P'+st.boxes[r][col] : ''}</div>\` : ''}\`).join('')}</div>\` : ''}\`).join('')}</div></div>\`;
+        const numDots = Math.min(Math.max(st.gridSize || 4, 4), 9);
+        const numBoxes = numDots - 1;
+        const totalRows = 2 * numDots - 1;
+        const totalCols = 2 * numDots - 1;
+        let dotSz = 16, boxSz = 60, lineThick = 4, txtSz = 'text-xl';
+        if (numDots === 5) { dotSz = 14; boxSz = 50; lineThick = 4; txtSz = 'text-lg'; }
+        else if (numDots === 6) { dotSz = 13; boxSz = 40; lineThick = 3.5; txtSz = 'text-base'; }
+        else if (numDots === 7) { dotSz = 12; boxSz = 34; lineThick = 3.5; txtSz = 'text-sm'; }
+        else if (numDots === 8) { dotSz = 11; boxSz = 29; lineThick = 3; txtSz = 'text-xs'; }
+        else if (numDots >= 9) { dotSz = 10; boxSz = 25; lineThick = 3; txtSz = 'text-[11px]'; }
+
+        const gridColsCss = Array.from({ length: totalCols }, (_, i) => i % 2 === 0 ? \`\${dotSz}px\` : \`\${boxSz}px\`).join(' ');
+        const gridRowsCss = Array.from({ length: totalRows }, (_, i) => i % 2 === 0 ? \`\${dotSz}px\` : \`\${boxSz}px\`).join(' ');
+
+        let gridCellsHtml = '';
+        for (let gr = 0; gr < totalRows; gr++) {
+          for (let gc = 0; gc < totalCols; gc++) {
+            const isEvenR = gr % 2 === 0, isEvenC = gc % 2 === 0;
+            if (isEvenR && isEvenC) {
+              gridCellsHtml += \`<div class="w-full h-full flex items-center justify-center pointer-events-none"><div style="width:\${dotSz}px; height:\${dotSz}px;" class="rounded-full bg-slate-200 border-2 border-slate-900 shadow-sm shadow-cyan-500/30"></div></div>\`;
+            } else if (isEvenR && !isEvenC) {
+              const r = gr / 2, c = (gc - 1) / 2;
+              const val = st.hLines[r] ? st.hLines[r][c] : null;
+              const cls = val === 1 ? 'bg-cyan-400 shadow-sm shadow-cyan-400' : (val === 2 ? 'bg-rose-500 shadow-sm shadow-rose-500' : (myTurn ? 'bg-slate-800 hover:bg-cyan-500/40 cursor-pointer' : 'bg-slate-850 cursor-default'));
+              gridCellsHtml += \`<div class="w-full h-full flex items-center justify-center px-0.5"><button onclick="socket.emit('dots_move', { roomId: currentRoom.id, type: 'h', r: \${r}, c: \${c}, playerNum: myPlayerNum })" \${val !== null || !myTurn ? 'disabled' : ''} style="height:\${lineThick}px;" class="w-full rounded-full transition-all \${cls}"></button></div>\`;
+            } else if (!isEvenR && isEvenC) {
+              const r = (gr - 1) / 2, c = gc / 2;
+              const val = st.vLines[r] ? st.vLines[r][c] : null;
+              const cls = val === 1 ? 'bg-cyan-400 shadow-sm shadow-cyan-400' : (val === 2 ? 'bg-rose-500 shadow-sm shadow-rose-500' : (myTurn ? 'bg-slate-800 hover:bg-cyan-500/40 cursor-pointer' : 'bg-slate-850 cursor-default'));
+              gridCellsHtml += \`<div class="w-full h-full flex items-center justify-center py-0.5"><button onclick="socket.emit('dots_move', { roomId: currentRoom.id, type: 'v', r: \${r}, c: \${c}, playerNum: myPlayerNum })" \${val !== null || !myTurn ? 'disabled' : ''} style="width:\${lineThick}px;" class="h-full rounded-full transition-all \${cls}"></button></div>\`;
+            } else {
+              const r = (gr - 1) / 2, c = (gc - 1) / 2;
+              const owner = st.boxes[r] ? st.boxes[r][c] : null;
+              const cls = owner === 1 ? 'bg-cyan-500/25 border border-cyan-500/40 text-cyan-300' : (owner === 2 ? 'bg-rose-500/25 border border-rose-500/40 text-rose-300' : 'bg-slate-900/30');
+              gridCellsHtml += \`<div class="w-full h-full m-0.5 rounded-lg flex items-center justify-center font-black \${cls}">\${owner === 1 ? \`<span class="\${txtSz} text-cyan-400">P1</span>\` : (owner === 2 ? \`<span class="\${txtSz} text-rose-400">P2</span>\` : '')}</div>\`;
+            }
+          }
+        }
+        c.innerHTML = \`<div class="flex flex-col items-center space-y-3 max-w-full"><div class="flex flex-col items-center space-y-1 bg-slate-900 px-3 py-1.5 rounded-2xl border border-slate-800"><span class="text-[11px] text-slate-400 font-bold">اندازه زمین:</span><div class="flex gap-1 flex-wrap justify-center">\${[4,5,6,7,8,9].map(sz => \`<button onclick="socket.emit('dots_set_size', { roomId: currentRoom.id, size: \${sz} })" class="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold \${sz === numDots ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'}">\${sz}×\${sz}</button>\`).join('')}</div></div><div class="flex gap-6 bg-slate-950 px-5 py-2 rounded-2xl border border-slate-800 text-xs font-mono shadow-inner"><span class="text-cyan-400 font-bold">🔵 آبی (P1): \${st.scores['1']}</span><span class="text-rose-400 font-bold">🔴 قرمز (P2): \${st.scores['2']}</span></div><div class="bg-slate-950 p-4 sm:p-6 rounded-3xl border-2 border-slate-800 shadow-2xl overflow-x-auto max-w-full"><div style="display:grid; grid-template-columns:\${gridColsCss}; grid-template-rows:\${gridRowsCss}; width:max-content;" class="mx-auto select-none">\${gridCellsHtml}</div></div><div class="flex gap-4 text-[11px] font-mono"><span class="text-cyan-400">■ خطوط بازیکن آبی</span><span class="text-rose-400">■ خطوط بازیکن قرمز</span></div></div>\`;
       } else {
         c.innerHTML = \`<div class="flex flex-col items-center space-y-3"><canvas id="c-arc" width="480" height="300" class="rounded-3xl border-2 border-slate-800 bg-slate-950"></canvas><div class="flex gap-4"><button onclick="socket.emit('pong_paddle', { roomId: currentRoom.id, y: Math.max(15, (myPlayerNum === 1 ? st.p1PaddleY : st.p2PaddleY) - 15), playerNum: myPlayerNum })" class="px-6 py-3 rounded-2xl bg-slate-800 text-cyan-400 font-bold border border-slate-700">▲ بالا</button><button onclick="socket.emit('pong_paddle', { roomId: currentRoom.id, y: Math.min(85, (myPlayerNum === 1 ? st.p1PaddleY : st.p2PaddleY) + 15), playerNum: myPlayerNum })" class="px-6 py-3 rounded-2xl bg-slate-800 text-cyan-400 font-bold border border-slate-700">▼ پایین</button></div></div>\`;
         const cv = document.getElementById('c-arc');
@@ -484,6 +524,17 @@ def on_ttt_move(data):
 
     emit('game_update', {'gameState': st, 'winner': room['winner'], 'status': room['status']}, to=room_id)
 
+@socketio.on('dots_set_size')
+def on_dots_set_size(data):
+    room_id = data.get('roomId')
+    size = max(4, min(int(data.get('size', 4)), 9))
+    if room_id in rooms and rooms[room_id]['gameType'] == 'dotsboxes':
+        rooms[room_id]['gameState'] = create_game_state('dotsboxes', size)
+        rooms[room_id]['winner'] = None
+        rooms[room_id]['status'] = 'playing'
+        rooms[room_id]['rematchRequested'] = {}
+        emit('game_update', {'gameState': rooms[room_id]['gameState'], 'winner': None, 'status': 'playing'}, to=room_id)
+
 @socketio.on('dots_move')
 def on_dots_move(data):
     room_id = data.get('roomId')
@@ -497,17 +548,24 @@ def on_dots_move(data):
     if st['currentTurn'] != player_num: return
 
     if m_type == 'h':
-        if st['hLines'][r][c]: return
-        st['hLines'][r][c] = True
+        if st['hLines'][r][c] is not None: return
+        st['hLines'][r][c] = player_num
     else:
-        if st['vLines'][r][c]: return
-        st['vLines'][r][c] = True
+        if st['vLines'][r][c] is not None: return
+        st['vLines'][r][c] = player_num
+
+    grid_size = st.get('gridSize', 4)
+    num_boxes = grid_size - 1
 
     completed_box = False
-    for br in range(3):
-        for bc in range(3):
+    for br in range(num_boxes):
+        for bc in range(num_boxes):
             if st['boxes'][br][bc] is None:
-                if st['hLines'][br][bc] and st['hLines'][br+1][bc] and st['vLines'][br][bc] and st['vLines'][br][bc+1]:
+                top = st['hLines'][br][bc]
+                bottom = st['hLines'][br+1][bc]
+                left = st['vLines'][br][bc]
+                right = st['vLines'][br][bc+1]
+                if top is not None and bottom is not None and left is not None and right is not None:
                     st['boxes'][br][bc] = player_num
                     st['scores'][str(player_num)] += 1
                     completed_box = True
@@ -515,7 +573,9 @@ def on_dots_move(data):
     if not completed_box:
         st['currentTurn'] = 2 if player_num == 1 else 1
 
-    if st['scores']['1'] + st['scores']['2'] >= 9:
+    total_claimed = st['scores']['1'] + st['scores']['2']
+    total_boxes = num_boxes * num_boxes
+    if total_claimed >= total_boxes:
         room['status'] = 'finished'
         room['winner'] = 1 if st['scores']['1'] > st['scores']['2'] else (2 if st['scores']['2'] > st['scores']['1'] else 'draw')
 
