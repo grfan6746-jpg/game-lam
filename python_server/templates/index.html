@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>سرور بازی دونفره محلی (Termux LAN)</title>
+  <title>سرور بازی محلی Termux (۱۰ بازی چندنفره)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;850;900&display=swap" rel="stylesheet">
   <style>
     body {
       font-family: 'Vazirmatn', system-ui, sans-serif;
@@ -24,12 +24,12 @@
   <!-- Header -->
   <header class="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-50">
     <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-cyan-500/20">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-cyan-500/20 text-lg">
           🎮
         </div>
         <div>
-          <h1 class="text-sm font-black tracking-tight text-slate-100">سرور بازی محلی Termux</h1>
+          <h1 class="text-sm font-black tracking-tight text-slate-100">سرور بازی محلی Termux LAN</h1>
           <p class="text-[10px] text-cyan-400 font-mono" id="server-ip-header">IP: {{ server_ip }}:{{ server_port }}</p>
         </div>
       </div>
@@ -71,12 +71,13 @@
         </div>
       </div>
 
-      <!-- Games Grid -->
+      <!-- Games Grid (10 Games) -->
       <div class="space-y-3">
-        <h2 class="text-sm font-black text-slate-400 flex items-center gap-2">
-          <span>انتخاب بازی برای ساخت اتاق جدید (۸ بازی):</span>
+        <h2 class="text-sm font-black text-slate-400 flex items-center justify-between">
+          <span>انتخاب بازی برای ساخت اتاق جدید (۱۰ بازی چندنفره):</span>
+          <span class="text-[11px] text-cyan-400 font-bold px-2.5 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40">شامل منچ و شطرنج ✨</span>
         </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5" id="games-list-grid">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5" id="games-list-grid">
           <!-- Game Cards rendered dynamically -->
         </div>
       </div>
@@ -87,7 +88,7 @@
       <div class="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 shadow-2xl space-y-4">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold">
           <span class="h-2 w-2 rounded-full bg-cyan-400 animate-ping"></span>
-          <span>در انتظار ورود گوشی دوم...</span>
+          <span>در انتظار ورود بازیکنان...</span>
         </div>
 
         <h3 id="room-game-title" class="text-lg font-black text-slate-100">بازی</h3>
@@ -105,48 +106,52 @@
           <div id="qrcode-container"></div>
         </div>
 
-        <p class="text-[11px] text-slate-400">گوشی دوم با اسکن این بارکد یا باز کردن آدرس زیر در همان وای‌فای متصل می‌شود:</p>
-        <p class="text-xs font-mono text-cyan-300 bg-slate-950 p-2 rounded-xl border border-slate-800/80 break-all" id="room-url-display"></p>
+        <p class="text-[11px] text-slate-400">گوشی دیگر با اسکن این بارکد یا باز کردن آدرس زیر متصل می‌شود:</p>
+        <p class="text-xs font-mono text-cyan-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 break-all select-all" id="room-url-display"></p>
+
+        <button onclick="leaveCurrentRoom()" class="px-5 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 transition">
+          لغو و بازگشت به لابی
+        </button>
       </div>
     </div>
 
-    <!-- VIEW 3: ACTIVE GAME VIEW -->
+    <!-- VIEW 3: ACTIVE GAME ARENA -->
     <div id="view-game" class="hidden w-full flex flex-col items-center space-y-4">
       
-      <!-- Turn / Status Banner -->
+      <!-- Top Status Bar -->
       <div class="w-full max-w-xl flex items-center justify-between px-5 py-2.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs font-bold shadow-lg">
         <div id="game-player1-badge" class="flex items-center gap-2 text-cyan-400">
-          <span class="h-3 w-3 rounded-full bg-cyan-400"></span>
+          <span class="h-3 w-3 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400"></span>
           <span id="game-p1-name">بازیکن ۱</span>
         </div>
-        <div id="game-status-text" class="px-3 py-1 rounded-full bg-slate-950 text-slate-200 border border-slate-800">
-          نوبت بازی
+        <div id="game-status-text" class="px-3 py-1 rounded-full bg-slate-950 text-slate-200 border border-slate-800 font-mono text-center">
+          در حال بازی
         </div>
         <div id="game-player2-badge" class="flex items-center gap-2 text-rose-400">
           <span id="game-p2-name">بازیکن ۲</span>
-          <span class="h-3 w-3 rounded-full bg-rose-400"></span>
+          <span class="h-3 w-3 rounded-full bg-rose-400 shadow-sm shadow-rose-400"></span>
         </div>
       </div>
 
-      <!-- Active Game Board Container -->
+      <!-- Game Arena Canvas / Components Container -->
       <div id="game-arena-container" class="w-full flex justify-center"></div>
 
-      <!-- Emotes Bar -->
+      <!-- Quick Emotes Bar -->
       <div class="flex items-center gap-2 pt-2">
         <span class="text-xs text-slate-500 font-bold">واکنش:</span>
-        <button onclick="sendEmote('🔥')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition">🔥</button>
-        <button onclick="sendEmote('👏')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition">👏</button>
-        <button onclick="sendEmote('😂')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition">😂</button>
-        <button onclick="sendEmote('😎')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition">😎</button>
-        <button onclick="sendEmote('🎯')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition">🎯</button>
+        <button onclick="sendEmote('🔥')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition active:scale-95">🔥</button>
+        <button onclick="sendEmote('👏')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition active:scale-95">👏</button>
+        <button onclick="sendEmote('😂')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition active:scale-95">😂</button>
+        <button onclick="sendEmote('😎')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition active:scale-95">😎</button>
+        <button onclick="sendEmote('🎯')" class="text-xl p-2 rounded-xl bg-slate-900 hover:bg-slate-800 transition active:scale-95">🎯</button>
       </div>
 
-      <!-- Rematch / Play Again Modal (Hidden by default) -->
-      <div id="game-over-panel" class="hidden w-full max-w-sm p-4 rounded-3xl bg-slate-900 border-2 border-cyan-500/50 shadow-2xl text-center space-y-3">
+      <!-- Game Over Modal / Card -->
+      <div id="game-over-panel" class="hidden w-full max-w-sm p-6 rounded-3xl bg-slate-900 border-2 border-cyan-500/50 shadow-2xl text-center space-y-4">
         <h4 id="game-over-title" class="text-lg font-black text-slate-100">پایان بازی!</h4>
         <div class="flex gap-3 justify-center">
-          <button onclick="requestRematch()" class="px-5 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/30 transition">
-            🔄 درخواست بازی مجدد
+          <button onclick="requestRematch()" class="px-5 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs shadow-lg transition">
+            🔄 بازی مجدد
           </button>
           <button onclick="leaveCurrentRoom()" class="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition">
             خروج به لابی
@@ -157,22 +162,25 @@
   </main>
 
   <script>
-    // ----------------- Client State -----------------
+    // ----------------- All 10 Games Definition -----------------
     const GAMES = [
-      { id: 'tictactoe', title: 'ضربدر و دایره', icon: '❌⭕', desc: 'بازی کلاسیک ۳×۳' },
-      { id: 'dotsboxes', title: 'نقطه و خط', icon: '🔵', desc: 'تصاحب مربع‌ها' },
+      { id: 'chess', title: 'شطرنج', icon: '♟️', desc: 'بازی فکری کلاسیک ۸×۸' },
+      { id: 'ludo', title: 'منچ (Ludo)', icon: '🎲', desc: 'رقابت ۲ تا ۴ نفره مهره‌ها' },
+      { id: 'tictactoe', title: 'ضربدر و دایره', icon: '❌⭕', desc: 'کلاسیک ۳×۳' },
+      { id: 'dotsboxes', title: 'نقطه و خط', icon: '🔵', desc: 'تصاحب مربع‌های خطی' },
       { id: 'battleship', title: 'نبرد کشتی‌ها', icon: '🚢', desc: 'شلیک به ناوگان حریف' },
       { id: 'connectfour', title: 'چهاردرخط', icon: '🔴🟡', desc: '۴ مهره متوالی' },
       { id: 'pong', title: 'پینگ‌پنگ', icon: '🏓', desc: 'راکت و توپ دوبعدی' },
       { id: 'snake', title: 'مار دونفره', icon: '🐍', desc: 'رقابت مارها در زمین' },
       { id: 'racing', title: 'مسابقه ماشین', icon: '🏎️', desc: 'پیست و ۳ دور مسابقه' },
-      { id: 'fighting', title: 'مبارزه تن‌به‌تن', icon: '⚔️', desc: 'مشت، پرش و سپر' }
+      { id: 'fighting', title: 'مبارزه تن‌به‌تن', icon: '⚔️', desc: 'مشت، پرش، دفاع' }
     ];
 
     let socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
     let currentRoom = null;
     let myPlayerNum = 1;
     let playerName = localStorage.getItem('localgame_name') || 'بازیکن';
+    let selectedChessSquare = null;
 
     document.getElementById('player-name-input').value = playerName;
     document.getElementById('player-name-input').addEventListener('input', (e) => {
@@ -261,6 +269,7 @@
 
     socket.on('game_reset', (data) => {
       currentRoom = data.room;
+      selectedChessSquare = null;
       document.getElementById('game-over-panel').classList.add('hidden');
       renderCurrentGame();
       updateStatusHeader();
@@ -301,6 +310,7 @@
       playBeep(330, 'sine', 0.1);
       if (currentRoom) socket.emit('leave_room');
       currentRoom = null;
+      selectedChessSquare = null;
       document.getElementById('view-lobby').classList.remove('hidden');
       document.getElementById('view-room-lobby').classList.add('hidden');
       document.getElementById('view-game').classList.add('hidden');
@@ -376,23 +386,124 @@
           document.getElementById('game-over-title').innerText = '💔 حریف برنده شد!';
         }
       } else {
-        const turn = currentRoom.gameState ? currentRoom.gameState.currentTurn : null;
-        if (turn) {
-          txt.innerText = turn === myPlayerNum ? '👉 نوبت شماست' : '⏳ نوبت حریف...';
+        if (currentRoom.gameType === 'chess') {
+          const myColor = myPlayerNum === 1 ? 'w' : 'b';
+          const curTurn = currentRoom.gameState.currentTurn;
+          txt.innerText = curTurn === myColor ? '👉 نوبت حرکت شماست (سفید)' : '⏳ نوبت حریف... (سیاه)';
+        } else if (currentRoom.gameType === 'ludo') {
+          txt.innerText = currentRoom.gameState.lastActionText || '🎲 در حال بازی منچ';
         } else {
-          txt.innerText = '⚔️ در حال بازی';
+          const turn = currentRoom.gameState ? currentRoom.gameState.currentTurn : null;
+          if (turn) {
+            txt.innerText = turn === myPlayerNum ? '👉 نوبت شماست' : '⏳ نوبت حریف...';
+          } else {
+            txt.innerText = '⚔️ در حال بازی';
+          }
         }
       }
     }
 
     // ----------------- Game Renderers -----------------
+    const CHESS_UNICODE = {
+      w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
+      b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' }
+    };
+
     function renderCurrentGame() {
       const container = document.getElementById('game-arena-container');
       const st = currentRoom.gameState;
       const type = currentRoom.gameType;
       const myTurn = st.currentTurn === myPlayerNum && currentRoom.status !== 'finished';
 
-      if (type === 'tictactoe') {
+      // 1. CHESS
+      if (type === 'chess') {
+        const myColor = myPlayerNum === 1 ? 'w' : 'b';
+        const isTurn = st.currentTurn === myColor && currentRoom.status !== 'finished';
+
+        container.innerHTML = `
+          <div class="flex flex-col items-center space-y-3 select-none">
+            <div class="flex items-center justify-between w-full max-w-sm px-2 text-xs font-bold text-slate-400">
+              <span>مهره‌های شما: ${myColor === 'w' ? 'سفید ⚪' : 'سیاه ⚫'}</span>
+              <span class="${isTurn ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}">${isTurn ? 'نوبت شماست' : 'نوبت حریف'}</span>
+            </div>
+
+            <!-- 8x8 Chess Board -->
+            <div class="grid grid-cols-8 gap-0 border-4 border-amber-950 rounded-2xl overflow-hidden shadow-2xl bg-amber-900/40">
+              ${st.board.map((row, r) => row.map((piece, c) => {
+                const isDark = (r + c) % 2 === 1;
+                const isSelected = selectedChessSquare && selectedChessSquare.r === r && selectedChessSquare.c === c;
+                const bgClass = isSelected
+                  ? 'bg-amber-400 ring-4 ring-amber-300 z-10'
+                  : isDark
+                  ? 'bg-[#769656]'
+                  : 'bg-[#eeeed2]';
+
+                const pieceSymbol = piece ? CHESS_UNICODE[piece.color][piece.type] : '';
+                const pieceColorClass = piece && piece.color === 'w' ? 'text-slate-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.8)]' : 'text-slate-950 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]';
+
+                return `
+                  <button onclick="onChessSquareClick(${r}, ${c})" class="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-3xl sm:text-4xl font-bold transition ${bgClass}">
+                    <span class="${pieceColorClass}">${pieceSymbol}</span>
+                  </button>
+                `;
+              }).join('')).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // 2. LUDO (MANCH)
+      else if (type === 'ludo') {
+        const isMyTurn = st.currentTurn === myPlayerNum && currentRoom.status !== 'finished';
+        const curSlot = st.players[st.currentTurn];
+
+        container.innerHTML = `
+          <div class="flex flex-col items-center space-y-3 w-full max-w-md select-none" dir="rtl">
+            <div class="flex items-center justify-between w-full px-4 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-bold">
+              <span>نوبت: ${curSlot ? curSlot.name : ''}</span>
+              <span class="text-amber-400 font-mono">${st.diceValue ? 'تاس: ' + st.diceValue : 'تاس بیندازید'}</span>
+            </div>
+
+            <!-- Compact Ludo SVG Board -->
+            <div class="relative w-full aspect-square max-w-[360px] rounded-3xl p-2 bg-slate-950 border-4 border-slate-800 shadow-2xl">
+              <svg viewBox="0 0 600 600" class="w-full h-full rounded-2xl">
+                <!-- Red Base -->
+                <rect x="2" y="2" width="236" height="236" rx="16" fill="#ef4444" stroke="#991b1b" strokeWidth="3" />
+                <rect x="24" y="24" width="192" height="192" rx="12" fill="#0f172a" stroke="#ef4444" strokeWidth="2" />
+                <!-- Green Base -->
+                <rect x="362" y="2" width="236" height="236" rx="16" fill="#10b981" stroke="#065f46" strokeWidth="3" />
+                <rect x="384" y="24" width="192" height="192" rx="12" fill="#0f172a" stroke="#10b981" strokeWidth="2" />
+                <!-- Yellow Base -->
+                <rect x="362" y="362" width="236" height="236" rx="16" fill="#f59e0b" stroke="#92400e" strokeWidth="3" />
+                <rect x="384" y="384" width="192" height="192" rx="12" fill="#0f172a" stroke="#f59e0b" strokeWidth="2" />
+                <!-- Blue Base -->
+                <rect x="2" y="362" width="236" height="236" rx="16" fill="#3b82f6" stroke="#1e40af" strokeWidth="3" />
+                <rect x="24" y="384" width="192" height="192" rx="12" fill="#0f172a" stroke="#3b82f6" strokeWidth="2" />
+                <!-- Center -->
+                <polygon points="240,240 300,300 240,360" fill="#ef4444" />
+                <polygon points="240,240 300,300 360,240" fill="#10b981" />
+                <polygon points="360,240 300,300 360,360" fill="#f59e0b" />
+                <polygon points="240,360 300,300 360,360" fill="#3b82f6" />
+                <circle cx="300" cy="300" r="20" fill="#0f172a" stroke="#f59e0b" strokeWidth="2" />
+                <text x="300" y="306" textAnchor="middle" fill="#fde047" fontSize="16" fontWeight="bold">🏆</text>
+
+                <!-- Dynamic Tokens -->
+                ${renderLudoTokensSvg(st)}
+              </svg>
+            </div>
+
+            <!-- Dice Button -->
+            <div class="flex items-center gap-3 w-full justify-center">
+              <button onclick="onLudoRollDiceClick()" ${!isMyTurn || st.hasRolled ? 'disabled' : ''} class="h-12 px-6 rounded-2xl font-black text-sm flex items-center gap-2 transition ${isMyTurn && !st.hasRolled ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg animate-pulse' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}">
+                🎲 پرتاب تاس (Roll Dice)
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
+      // 3. TIC TAC TOE
+      else if (type === 'tictactoe') {
         container.innerHTML = `
           <div class="grid grid-cols-3 gap-3 bg-slate-950 p-5 rounded-3xl border-2 border-slate-800 shadow-2xl">
             ${st.board.map((cell, idx) => `
@@ -402,7 +513,10 @@
             `).join('')}
           </div>
         `;
-      } else if (type === 'dotsboxes') {
+      }
+
+      // 4. DOTS & BOXES
+      else if (type === 'dotsboxes') {
         container.innerHTML = `
           <div class="flex flex-col items-center space-y-4">
             <div class="flex gap-8 bg-slate-950 px-6 py-2 rounded-2xl border border-slate-800 font-mono text-sm">
@@ -435,7 +549,10 @@
             </div>
           </div>
         `;
-      } else if (type === 'connectfour') {
+      }
+
+      // 5. CONNECT FOUR
+      else if (type === 'connectfour') {
         container.innerHTML = `
           <div class="flex flex-col items-center space-y-3">
             <div class="grid grid-cols-7 gap-2">
@@ -450,7 +567,10 @@
             </div>
           </div>
         `;
-      } else if (type === 'battleship') {
+      }
+
+      // 6. BATTLESHIP
+      else if (type === 'battleship') {
         const grid = myPlayerNum === 1 ? st.p2Grid : st.p1Grid;
         container.innerHTML = `
           <div class="flex flex-col items-center space-y-3">
@@ -464,8 +584,10 @@
             </div>
           </div>
         `;
-      } else {
-        // Arcade 2D Games Canvas (Pong, Snake, Racing, Fighting)
+      }
+
+      // 7. ARCADE 2D GAMES (Pong, Snake, Racing, Fighting)
+      else {
         container.innerHTML = `
           <div class="flex flex-col items-center space-y-3 w-full max-w-lg">
             <canvas id="arcade-canvas" width="500" height="320" class="w-full rounded-3xl border-2 border-slate-800 bg-slate-950 shadow-2xl"></canvas>
@@ -477,6 +599,45 @@
         `;
         drawArcadeCanvas(type, st);
       }
+    }
+
+    function renderLudoTokensSvg(st) {
+      // Helper to render Ludo Pawns
+      const yards = {
+        red: [[60, 60], [180, 60], [60, 180], [180, 180]],
+        green: [[420, 60], [540, 60], [420, 180], [540, 180]],
+        yellow: [[420, 420], [540, 420], [420, 540], [540, 540]],
+        blue: [[60, 420], [180, 420], [60, 540], [180, 540]]
+      };
+
+      let svg = '';
+      st.activePlayerNums.forEach(pNum => {
+        const pSlot = st.players[pNum];
+        const isMovableTurn = st.currentTurn === pNum && st.hasRolled;
+        pSlot.tokens.forEach(t => {
+          let cx = 300, cy = 300;
+          if (t.step === -1) {
+            const pt = yards[pSlot.color][t.id];
+            cx = pt[0]; cy = pt[1];
+          } else {
+            // Simplified track representation
+            cx = 300 + Math.cos((t.step * 0.12) + pNum) * 160;
+            cy = 300 + Math.sin((t.step * 0.12) + pNum) * 160;
+          }
+
+          const isMovable = isMovableTurn && st.movableTokenIds.includes(t.id);
+          const colorHex = pSlot.color === 'red' ? '#ef4444' : pSlot.color === 'green' ? '#10b981' : pSlot.color === 'yellow' ? '#f59e0b' : '#3b82f6';
+
+          svg += `
+            <g onclick="onLudoTokenClick(${t.id})" style="cursor: ${isMovable ? 'pointer' : 'default'}">
+              ${isMovable ? `<circle cx="${cx}" cy="${cy}" r="22" fill="none" stroke="#fde047" stroke-width="3" stroke-dasharray="4 2" />` : ''}
+              <circle cx="${cx}" cy="${cy}" r="16" fill="${colorHex}" stroke="#ffffff" stroke-width="2.5" />
+              <text x="${cx}" y="${cy+5}" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="bold">${t.id+1}</text>
+            </g>
+          `;
+        });
+      });
+      return svg;
     }
 
     function drawArcadeCanvas(type, st) {
@@ -500,6 +661,49 @@
         st.snake2.forEach(s => { ctx.fillStyle = '#fb7185'; ctx.fillRect(s.x*20, s.y*20, 18, 18); });
         st.food.forEach(f => { ctx.fillStyle = '#22c55e'; ctx.fillRect(f.x*20, f.y*20, 18, 18); });
       }
+    }
+
+    // ----------------- Game Move Event Helpers -----------------
+    function onChessSquareClick(r, c) {
+      const st = currentRoom.gameState;
+      const myColor = myPlayerNum === 1 ? 'w' : 'b';
+      if (st.currentTurn !== myColor) return;
+
+      const piece = st.board[r][c];
+
+      if (!selectedChessSquare) {
+        if (piece && piece.color === myColor) {
+          selectedChessSquare = { r, c };
+          playBeep(480);
+          renderCurrentGame();
+        }
+      } else {
+        if (selectedChessSquare.r === r && selectedChessSquare.c === c) {
+          selectedChessSquare = null;
+          renderCurrentGame();
+          return;
+        }
+
+        // Send Chess Move
+        playBeep(600);
+        socket.emit('chess_move', {
+          roomId: currentRoom.id,
+          from: selectedChessSquare,
+          to: { r, c },
+          promotion: 'q'
+        });
+        selectedChessSquare = null;
+      }
+    }
+
+    function onLudoRollDiceClick() {
+      playBeep(520);
+      socket.emit('ludo_roll_dice', { roomId: currentRoom.id });
+    }
+
+    function onLudoTokenClick(tokenId) {
+      playBeep(600);
+      socket.emit('ludo_move_token', { roomId: currentRoom.id, tokenId });
     }
 
     function onTTTClick(idx) { playBeep(500); socket.emit('ttt_move', { roomId: currentRoom.id, index: idx, playerNum: myPlayerNum }); }
