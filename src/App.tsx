@@ -9,7 +9,7 @@ import { GAMES } from './data/games';
 import { GameType, Room, EmoteMessage, Ship, CarState } from './types';
 import { sounds } from './utils/audio';
 
-// Import 8 games
+// Import 10 games
 import { TicTacToe } from './components/games/TicTacToe';
 import { DotsAndBoxes } from './components/games/DotsAndBoxes';
 import { Battleship } from './components/games/Battleship';
@@ -18,6 +18,8 @@ import { Pong } from './components/games/Pong';
 import { Snake } from './components/games/Snake';
 import { Racing } from './components/games/Racing';
 import { Fighting } from './components/games/Fighting';
+import { Chess } from './components/games/Chess';
+import { Ludo } from './components/games/Ludo';
 
 export function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -290,6 +292,47 @@ export function App() {
               p2: { x: 450, y: 300, vx: 0, vy: 0, health: 100, isGrounded: true, isAttacking: false, attackCooldown: 0, isDefending: false, facing: 'left', roundsWon: 0, animState: 'idle' },
               targetRounds: 2,
             };
+          case 'chess': {
+            const b: any[][] = Array(8).fill(null).map(() => Array(8).fill(null));
+            b[0] = [{ type: 'r', color: 'b' }, { type: 'n', color: 'b' }, { type: 'b', color: 'b' }, { type: 'q', color: 'b' }, { type: 'k', color: 'b' }, { type: 'b', color: 'b' }, { type: 'n', color: 'b' }, { type: 'r', color: 'b' }];
+            b[1] = Array(8).fill(null).map(() => ({ type: 'p', color: 'b' }));
+            b[6] = Array(8).fill(null).map(() => ({ type: 'p', color: 'w' }));
+            b[7] = [{ type: 'r', color: 'w' }, { type: 'n', color: 'w' }, { type: 'b', color: 'w' }, { type: 'q', color: 'w' }, { type: 'k', color: 'w' }, { type: 'b', color: 'w' }, { type: 'n', color: 'w' }, { type: 'r', color: 'w' }];
+            return {
+              board: b,
+              currentTurn: 'w',
+              isCheck: false,
+              isCheckmate: false,
+              isStalemate: false,
+              castlingRights: { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } },
+              enPassantTarget: null,
+              moveHistory: [],
+              capturedPieces: { w: [], b: [] },
+              lastMove: null,
+            };
+          }
+          case 'ludo': {
+            return {
+              totalPlayers: 4,
+              humanCount: 4,
+              aiCount: 0,
+              currentTurn: 1,
+              diceValue: null,
+              diceRolling: false,
+              hasRolled: false,
+              consecutiveSixes: 0,
+              players: {
+                1: { playerNum: 1, color: 'red', name: 'قرمز 🔴', isAi: false, tokens: [{ id: 0, step: -1 }, { id: 1, step: -1 }, { id: 2, step: -1 }, { id: 3, step: -1 }], finishedCount: 0 },
+                2: { playerNum: 2, color: 'green', name: 'سبز 🟢', isAi: false, tokens: [{ id: 0, step: -1 }, { id: 1, step: -1 }, { id: 2, step: -1 }, { id: 3, step: -1 }], finishedCount: 0 },
+                3: { playerNum: 3, color: 'yellow', name: 'زرد 🟡', isAi: false, tokens: [{ id: 0, step: -1 }, { id: 1, step: -1 }, { id: 2, step: -1 }, { id: 3, step: -1 }], finishedCount: 0 },
+                4: { playerNum: 4, color: 'blue', name: 'آبی 🔵', isAi: false, tokens: [{ id: 0, step: -1 }, { id: 1, step: -1 }, { id: 2, step: -1 }, { id: 3, step: -1 }], finishedCount: 0 },
+              },
+              activePlayerNums: [1, 2, 3, 4],
+              movableTokenIds: [],
+              winner: null,
+              lastActionText: 'تاس بیندازید تا بازی آغاز شود',
+            };
+          }
         }
       })(),
       createdAt: Date.now(),
@@ -517,6 +560,125 @@ export function App() {
     }
   };
 
+  // 9. Chess Move
+  const handleChessMove = (move: { from: { r: number; c: number }; to: { r: number; c: number }; promotion?: any }) => {
+    if (!isPassAndPlay && socket) {
+      socket.emit('chess_move', move);
+    } else if (currentRoom) {
+      const st = { ...currentRoom.gameState };
+      const piece = st.board[move.from.r][move.from.c];
+      if (!piece) return;
+
+      const targetPiece = st.board[move.to.r][move.to.c];
+      if (targetPiece) {
+        if (piece.color === 'w') st.capturedPieces.b.push(targetPiece);
+        else st.capturedPieces.w.push(targetPiece);
+      }
+
+      // Move piece
+      st.board[move.from.r][move.from.c] = null;
+      if (move.promotion && piece.type === 'p' && (move.to.r === 0 || move.to.r === 7)) {
+        st.board[move.to.r][move.to.c] = { type: move.promotion, color: piece.color };
+      } else {
+        st.board[move.to.r][move.to.c] = piece;
+      }
+
+      st.lastMove = { from: move.from, to: move.to };
+      st.currentTurn = piece.color === 'w' ? 'b' : 'w';
+
+      if (targetPiece && targetPiece.type === 'k') {
+        setCurrentRoom({ ...currentRoom, gameState: st, winner: piece.color === 'w' ? 1 : 2, status: 'finished' });
+      } else {
+        setCurrentRoom({ ...currentRoom, gameState: st });
+      }
+    }
+  };
+
+  // 10. Ludo Roll Dice & Move Token
+  const handleLudoRollDice = () => {
+    if (!isPassAndPlay && socket) {
+      socket.emit('ludo_roll_dice');
+    } else if (currentRoom) {
+      const st = { ...currentRoom.gameState };
+      const dice = Math.floor(Math.random() * 6) + 1;
+      st.diceValue = dice;
+      st.hasRolled = true;
+
+      const curSlot = st.players[st.currentTurn];
+      const movables: number[] = [];
+      curSlot.tokens.forEach((t: any) => {
+        if (t.step === -1 && dice === 6) movables.push(t.id);
+        else if (t.step >= 0 && t.step + dice <= 56) movables.push(t.id);
+      });
+      st.movableTokenIds = movables;
+
+      if (movables.length === 0) {
+        st.lastActionText = `${curSlot.name} عدد ${dice} آورد؛ حرکتی ندارد!`;
+        setCurrentRoom({ ...currentRoom, gameState: st });
+        setTimeout(() => {
+          const curIdx = st.activePlayerNums.indexOf(st.currentTurn);
+          const nextIdx = (curIdx + 1) % st.activePlayerNums.length;
+          st.currentTurn = st.activePlayerNums[nextIdx];
+          st.diceValue = null;
+          st.hasRolled = false;
+          st.movableTokenIds = [];
+          st.lastActionText = `نوبت ${st.players[st.currentTurn].name}`;
+          setCurrentRoom({ ...currentRoom, gameState: { ...st } });
+        }, 900);
+      } else {
+        st.lastActionText = `${curSlot.name} عدد ${dice} آورد. یک مهره را لمس کنید.`;
+        setCurrentRoom({ ...currentRoom, gameState: st });
+      }
+    }
+  };
+
+  const handleLudoMoveToken = (tokenId: number) => {
+    if (!isPassAndPlay && socket) {
+      socket.emit('ludo_move_token', { tokenId });
+    } else if (currentRoom) {
+      const st = { ...currentRoom.gameState };
+      const curSlot = st.players[st.currentTurn];
+      const dice = st.diceValue;
+      if (!curSlot || !dice) return;
+
+      const token = curSlot.tokens.find((t: any) => t.id === tokenId);
+      if (!token) return;
+
+      let captured = false;
+      if (token.step === -1 && dice === 6) {
+        token.step = 0;
+        st.lastActionText = `${curSlot.name} یک مهره وارد بازی کرد! ⭐`;
+      } else if (token.step >= 0 && token.step + dice <= 56) {
+        token.step += dice;
+        st.lastActionText = `${curSlot.name} مهره ${tokenId + 1} را جلو برد.`;
+      }
+
+      const finished = curSlot.tokens.filter((t: any) => t.step === 56).length;
+      curSlot.finishedCount = finished;
+      if (finished === 4) {
+        setCurrentRoom({ ...currentRoom, gameState: st, winner: st.currentTurn, status: 'finished' });
+        return;
+      }
+
+      if (dice === 6 || captured) {
+        st.diceValue = null;
+        st.hasRolled = false;
+        st.movableTokenIds = [];
+        st.lastActionText += ' (جایزه ۶!)';
+        setCurrentRoom({ ...currentRoom, gameState: st });
+      } else {
+        const curIdx = st.activePlayerNums.indexOf(st.currentTurn);
+        const nextIdx = (curIdx + 1) % st.activePlayerNums.length;
+        st.currentTurn = st.activePlayerNums[nextIdx];
+        st.diceValue = null;
+        st.hasRolled = false;
+        st.movableTokenIds = [];
+        st.lastActionText = `نوبت ${st.players[st.currentTurn].name}`;
+        setCurrentRoom({ ...currentRoom, gameState: st });
+      }
+    }
+  };
+
   const selectedGameInfo = currentRoom
     ? GAMES.find((g) => g.id === currentRoom.gameType) || GAMES[0]
     : GAMES[0];
@@ -644,6 +806,32 @@ export function App() {
                 playerNum={playerNum}
                 onAction={handleFightingAction}
                 disabled={currentRoom.status === 'finished'}
+              />
+            )}
+
+            {currentRoom.gameType === 'chess' && (
+              <Chess
+                state={currentRoom.gameState}
+                playerNum={playerNum}
+                onMove={handleChessMove}
+                disabled={!isPassAndPlay && (
+                  (playerNum === 1 && currentRoom.gameState?.currentTurn !== 'w') ||
+                  (playerNum === 2 && currentRoom.gameState?.currentTurn !== 'b') ||
+                  currentRoom.status === 'finished'
+                )}
+              />
+            )}
+
+            {currentRoom.gameType === 'ludo' && (
+              <Ludo
+                state={currentRoom.gameState}
+                playerNum={playerNum}
+                onRollDice={handleLudoRollDice}
+                onMoveToken={handleLudoMoveToken}
+                disabled={!isPassAndPlay && (
+                  currentRoom.gameState?.currentTurn !== playerNum ||
+                  currentRoom.status === 'finished'
+                )}
               />
             )}
           </GameWrapper>

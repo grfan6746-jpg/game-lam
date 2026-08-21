@@ -6,7 +6,9 @@ export type GameType =
   | 'pong'
   | 'snake'
   | 'racing'
-  | 'fighting';
+  | 'fighting'
+  | 'chess'
+  | 'ludo';
 
 export interface GameInfo {
   id: GameType;
@@ -24,7 +26,7 @@ export interface Player {
   id: string;
   socketId: string;
   name: string;
-  playerNum: 1 | 2;
+  playerNum: 1 | 2 | 3 | 4;
   connected: boolean;
   score: number;
 }
@@ -34,7 +36,7 @@ export interface Room {
   gameType: GameType;
   players: Player[];
   status: 'waiting' | 'playing' | 'finished';
-  winner: 1 | 2 | 'draw' | null;
+  winner: 1 | 2 | 3 | 4 | 'draw' | null;
   rematchRequested: { [playerNum: number]: boolean };
   gameState: any;
   createdAt: number;
@@ -152,8 +154,79 @@ export interface FightingState {
   targetRounds: number;
 }
 
+// 9. Chess
+export type ChessPieceType = 'p' | 'r' | 'n' | 'b' | 'q' | 'k';
+export type ChessPieceColor = 'w' | 'b';
+
+export interface ChessPiece {
+  type: ChessPieceType;
+  color: ChessPieceColor;
+}
+
+export interface ChessMove {
+  from: { r: number; c: number };
+  to: { r: number; c: number };
+  promotion?: ChessPieceType;
+  piece?: ChessPiece;
+  captured?: ChessPiece | null;
+  san?: string;
+}
+
+export interface ChessState {
+  board: (ChessPiece | null)[][]; // 8x8 matrix
+  currentTurn: 'w' | 'b'; // 'w' = Player 1 (White), 'b' = Player 2 (Black)
+  isCheck: boolean;
+  isCheckmate: boolean;
+  isStalemate: boolean;
+  castlingRights: {
+    w: { kingSide: boolean; queenSide: boolean };
+    b: { kingSide: boolean; queenSide: boolean };
+  };
+  enPassantTarget: { r: number; c: number } | null;
+  moveHistory: ChessMove[];
+  capturedPieces: {
+    w: ChessPiece[];
+    b: ChessPiece[];
+  };
+  lastMove: { from: { r: number; c: number }; to: { r: number; c: number } } | null;
+  isAiOpponent?: boolean;
+}
+
+// 10. Ludo (منچ)
+export type LudoColor = 'red' | 'green' | 'yellow' | 'blue';
+
+export interface LudoToken {
+  id: number; // 0, 1, 2, 3
+  step: number; // -1 = yard/base, 0..50 = main track, 51..56 = home path (56 = won/home)
+}
+
+export interface LudoPlayerSlot {
+  playerNum: 1 | 2 | 3 | 4;
+  color: LudoColor;
+  name: string;
+  isAi: boolean;
+  tokens: LudoToken[];
+  finishedCount: number;
+}
+
+export interface LudoState {
+  totalPlayers: 2 | 3 | 4;
+  humanCount: number;
+  aiCount: number;
+  currentTurn: 1 | 2 | 3 | 4;
+  diceValue: number | null;
+  diceRolling: boolean;
+  hasRolled: boolean;
+  consecutiveSixes: number;
+  players: { [playerNum: number]: LudoPlayerSlot };
+  activePlayerNums: (1 | 2 | 3 | 4)[];
+  movableTokenIds: number[];
+  winner: number | null;
+  lastActionText: string;
+}
+
 export interface EmoteMessage {
-  playerNum: 1 | 2;
+  playerNum: 1 | 2 | 3 | 4;
   emoji: string;
   id: string;
 }

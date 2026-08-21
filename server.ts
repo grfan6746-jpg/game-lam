@@ -3,7 +3,7 @@ import http from 'http';
 import path from 'path';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { createServer as createViteServer } from 'vite';
-import { GameType, Room, BattleshipState, Ship, PongState, SnakeState, RacingState, FightingState } from './src/types';
+import { GameType, Room, BattleshipState, Ship, PongState, SnakeState, RacingState, FightingState, ChessState, LudoState, ChessPiece, LudoColor } from './src/types';
 
 const app = express();
 const server = http.createServer(app);
@@ -145,6 +145,80 @@ function initGameState(gameType: GameType, options?: { gridSize?: number }) {
         },
         targetRounds: 2,
       } as FightingState;
+    case 'chess': {
+      const b: (ChessPiece | null)[][] = Array(8).fill(null).map(() => Array(8).fill(null));
+      // Setup Black
+      b[0] = [
+        { type: 'r', color: 'b' }, { type: 'n', color: 'b' }, { type: 'b', color: 'b' }, { type: 'q', color: 'b' },
+        { type: 'k', color: 'b' }, { type: 'b', color: 'b' }, { type: 'n', color: 'b' }, { type: 'r', color: 'b' }
+      ];
+      b[1] = Array(8).fill(null).map(() => ({ type: 'p', color: 'b' }));
+      // Setup White
+      b[6] = Array(8).fill(null).map(() => ({ type: 'p', color: 'w' }));
+      b[7] = [
+        { type: 'r', color: 'w' }, { type: 'n', color: 'w' }, { type: 'b', color: 'w' }, { type: 'q', color: 'w' },
+        { type: 'k', color: 'w' }, { type: 'b', color: 'w' }, { type: 'n', color: 'w' }, { type: 'r', color: 'w' }
+      ];
+
+      return {
+        board: b,
+        currentTurn: 'w',
+        isCheck: false,
+        isCheckmate: false,
+        isStalemate: false,
+        castlingRights: {
+          w: { kingSide: true, queenSide: true },
+          b: { kingSide: true, queenSide: true },
+        },
+        enPassantTarget: null,
+        moveHistory: [],
+        capturedPieces: { w: [], b: [] },
+        lastMove: null,
+      } as ChessState;
+    }
+    case 'ludo': {
+      const totalPlayers = (options as any)?.totalPlayers || 4; // 2, 3, or 4
+      const humanCount = (options as any)?.humanCount ?? (totalPlayers === 2 ? 2 : 2);
+      const aiCount = totalPlayers - humanCount;
+      const allColors: LudoColor[] = ['red', 'green', 'yellow', 'blue'];
+      const activeColors = allColors.slice(0, totalPlayers);
+      const playersMap: { [pNum: number]: any } = {};
+      const activeNums: (1 | 2 | 3 | 4)[] = [];
+
+      activeColors.forEach((color, idx) => {
+        const pNum = (idx + 1) as 1 | 2 | 3 | 4;
+        activeNums.push(pNum);
+        playersMap[pNum] = {
+          playerNum: pNum,
+          color,
+          name: pNum <= humanCount ? `بازیکن ${pNum}` : `هوش مصنوعی ${pNum}`,
+          isAi: pNum > humanCount,
+          tokens: [
+            { id: 0, step: -1 },
+            { id: 1, step: -1 },
+            { id: 2, step: -1 },
+            { id: 3, step: -1 },
+          ],
+          finishedCount: 0,
+        };
+      });
+
+      return {
+        totalPlayers: totalPlayers as any,
+        humanCount,
+        aiCount,
+        currentTurn: 1,
+        diceValue: null,
+        diceRolling: false,
+        hasRolled: false,
+        consecutiveSixes: 0,
+        players: playersMap,
+        activePlayerNums: activeNums,
+        movableTokenIds: [],
+        winner: null,
+        lastActionText: 'تاس بیندازید تا بازی آغاز شود',
+      } as LudoState;
+    }
     default:
       return {};
   }
@@ -979,6 +1053,330 @@ io.on('connection', (socket: Socket) => {
         }
       }
     }
+  });
+
+  // 9. Chess Move Handler
+  socket.on('chess_move', (data: { from: { r: number; c: number }; to: { r: number; c: number }; promotion?: any }) => {
+    const roomId = (socket as any).roomId;
+    const playerNum = (socket as any).playerNum;
+    const room = rooms[roomId];
+    if (!room || room.status !== 'playing') return;
+    const st = room.gameState as ChessState;
+
+    const myColor = playerNum === 1 ? 'w' : 'b';
+    if (st.currentTurn !== myColor) return;
+
+    const piece = st.board[data.from.r][data.from.c];
+    if (!piece || piece.color !== myColor) return;
+
+    const targetPiece = st.board[data.to.r][data.to.c];
+
+    // En Passant Capture
+    if (piece.type === 'p' && st.enPassantTarget && data.to.r === st.enPassantTarget.r && data.to.c === st.enPassantTarget.c) {
+      const captureRow = myColor === 'w' ? data.to.r + 1 : data.to.r - 1;
+      const capturedPawn = st.board[captureRow][data.to.c];
+      if (capturedPawn) {
+        if (myColor === 'w') st.capturedPieces.b.push(capturedPawn);
+        else st.capturedPieces.w.push(capturedPawn);
+        st.board[captureRow][data.to.c] = null;
+      }
+    } else if (targetPiece) {
+      if (myColor === 'w') st.capturedPieces.b.push(targetPiece);
+      else st.capturedPieces.w.push(targetPiece);
+    }
+
+    // Castling Rook Movement
+    if (piece.type === 'k' && Math.abs(data.to.c - data.from.c) === 2) {
+      const row = data.from.r;
+      if (data.to.c === 6) {
+        // King-side
+        st.board[row][5] = st.board[row][7];
+        st.board[row][7] = null;
+      } else if (data.to.c === 2) {
+        // Queen-side
+        st.board[row][3] = st.board[row][0];
+        st.board[row][0] = null;
+      }
+    }
+
+    // Move Piece
+    st.board[data.from.r][data.from.c] = null;
+    if (data.promotion && piece.type === 'p' && (data.to.r === 0 || data.to.r === 7)) {
+      st.board[data.to.r][data.to.c] = { type: data.promotion, color: myColor };
+    } else {
+      st.board[data.to.r][data.to.c] = piece;
+    }
+
+    // Update En Passant Target
+    if (piece.type === 'p' && Math.abs(data.to.r - data.from.r) === 2) {
+      st.enPassantTarget = {
+        r: (data.from.r + data.to.r) / 2,
+        c: data.from.c,
+      };
+    } else {
+      st.enPassantTarget = null;
+    }
+
+    // Update Castling Rights
+    if (piece.type === 'k') {
+      st.castlingRights[myColor].kingSide = false;
+      st.castlingRights[myColor].queenSide = false;
+    } else if (piece.type === 'r') {
+      if (data.from.c === 0) st.castlingRights[myColor].queenSide = false;
+      if (data.from.c === 7) st.castlingRights[myColor].kingSide = false;
+    }
+
+    st.lastMove = { from: data.from, to: data.to };
+    st.moveHistory.push({
+      from: data.from,
+      to: data.to,
+      piece,
+      captured: targetPiece,
+      promotion: data.promotion,
+    });
+
+    // Check King Capture Win (or standard turn switch)
+    if (targetPiece && targetPiece.type === 'k') {
+      room.winner = playerNum;
+      room.status = 'finished';
+    } else {
+      st.currentTurn = myColor === 'w' ? 'b' : 'w';
+    }
+
+    io.to(roomId).emit('game_update', {
+      gameState: st,
+      winner: room.winner,
+      status: room.status,
+    });
+  });
+
+  // 10. Ludo (منچ) Helpers & Handlers
+  const SAFE_SPOTS = [0, 8, 13, 21, 26, 34, 39, 47];
+  const COLOR_OFFSETS: { [key: string]: number } = { red: 0, green: 13, yellow: 26, blue: 39 };
+
+  function handleLudoBotTurn(roomId: string) {
+    const room = rooms[roomId];
+    if (!room || room.status !== 'playing') return;
+    const st = room.gameState as LudoState;
+    const curSlot = st.players[st.currentTurn];
+    if (!curSlot || !curSlot.isAi) return;
+
+    // AI Bot Step 1: Roll Dice
+    setTimeout(() => {
+      if (!rooms[roomId] || rooms[roomId].status !== 'playing') return;
+      const dice = Math.floor(Math.random() * 6) + 1;
+      st.diceValue = dice;
+      st.hasRolled = true;
+
+      // Find Movable Tokens for Bot
+      const movables: number[] = [];
+      curSlot.tokens.forEach((t) => {
+        if (t.step === -1 && dice === 6) movables.push(t.id);
+        else if (t.step >= 0 && t.step + dice <= 56) movables.push(t.id);
+      });
+      st.movableTokenIds = movables;
+
+      if (movables.length === 0) {
+        st.lastActionText = `${curSlot.name} عدد ${dice} آورد اما حرکتی نداشت!`;
+        // Advance Turn
+        setTimeout(() => {
+          advanceLudoTurn(roomId);
+        }, 800);
+      } else {
+        st.lastActionText = `${curSlot.name} عدد ${dice} آورد و در حال حرکت است...`;
+        io.to(roomId).emit('game_update', {
+          gameState: st,
+          winner: room.winner,
+          status: room.status,
+        });
+
+        // AI Bot Step 2: Choose best move
+        setTimeout(() => {
+          // Priority: 1. Leaving base on 6 -> 2. Capturing opponent -> 3. Token closest to finish
+          let chosenId = movables[0];
+          const baseToken = movables.find((id) => curSlot.tokens[id].step === -1);
+          if (baseToken !== undefined && dice === 6) {
+            chosenId = baseToken;
+          } else {
+            // Find highest step
+            let maxStep = -1;
+            movables.forEach((id) => {
+              if (curSlot.tokens[id].step > maxStep) {
+                maxStep = curSlot.tokens[id].step;
+                chosenId = id;
+              }
+            });
+          }
+
+          executeLudoMove(roomId, chosenId);
+        }, 900);
+      }
+
+      io.to(roomId).emit('game_update', {
+        gameState: st,
+        winner: room.winner,
+        status: room.status,
+      });
+    }, 700);
+  }
+
+  function advanceLudoTurn(roomId: string) {
+    const room = rooms[roomId];
+    if (!room || room.status !== 'playing') return;
+    const st = room.gameState as LudoState;
+
+    const curIdx = st.activePlayerNums.indexOf(st.currentTurn);
+    const nextIdx = (curIdx + 1) % st.activePlayerNums.length;
+    st.currentTurn = st.activePlayerNums[nextIdx];
+    st.diceValue = null;
+    st.hasRolled = false;
+    st.movableTokenIds = [];
+    st.lastActionText = `نوبت ${st.players[st.currentTurn].name}`;
+
+    io.to(roomId).emit('game_update', {
+      gameState: st,
+      winner: room.winner,
+      status: room.status,
+    });
+
+    if (st.players[st.currentTurn]?.isAi) {
+      handleLudoBotTurn(roomId);
+    }
+  }
+
+  function executeLudoMove(roomId: string, tokenId: number) {
+    const room = rooms[roomId];
+    if (!room || room.status !== 'playing') return;
+    const st = room.gameState as LudoState;
+    const curSlot = st.players[st.currentTurn];
+    const dice = st.diceValue;
+    if (!curSlot || !dice) return;
+
+    const token = curSlot.tokens.find((t) => t.id === tokenId);
+    if (!token) return;
+
+    let captured = false;
+    if (token.step === -1 && dice === 6) {
+      token.step = 0; // enter track
+      st.lastActionText = `${curSlot.name} یک مهره را وارد بازی کرد! ⭐`;
+    } else if (token.step >= 0 && token.step + dice <= 56) {
+      token.step += dice;
+      st.lastActionText = `${curSlot.name} مهره ${tokenId + 1} را ${dice} خانه حرکت داد.`;
+
+      // Check Captures on Main Track
+      if (token.step <= 50) {
+        const myGlobalTile = (COLOR_OFFSETS[curSlot.color] + token.step) % 52;
+        const isSafeTile = SAFE_SPOTS.includes(myGlobalTile);
+
+        if (!isSafeTile) {
+          // Check opponent tokens on same tile
+          st.activePlayerNums.forEach((otherPNum) => {
+            if (otherPNum === st.currentTurn) return;
+            const otherSlot = st.players[otherPNum];
+            otherSlot.tokens.forEach((otherToken) => {
+              if (otherToken.step >= 0 && otherToken.step <= 50) {
+                const otherGlobalTile = (COLOR_OFFSETS[otherSlot.color] + otherToken.step) % 52;
+                if (otherGlobalTile === myGlobalTile) {
+                  otherToken.step = -1; // Send back to base!
+                  captured = true;
+                  st.lastActionText = `💥 ${curSlot.name} مهره ${otherSlot.name} را زد و جایزه گرفت!`;
+                }
+              }
+            });
+          });
+        }
+      }
+    }
+
+    // Check Win Condition: All 4 tokens at 56
+    const finished = curSlot.tokens.filter((t) => t.step === 56).length;
+    curSlot.finishedCount = finished;
+    if (finished === 4) {
+      room.winner = st.currentTurn;
+      room.status = 'finished';
+      st.lastActionText = `🏆 ${curSlot.name} برنده بازی منچ شد!`;
+      io.to(roomId).emit('game_update', {
+        gameState: st,
+        winner: room.winner,
+        status: room.status,
+      });
+      return;
+    }
+
+    // Extra Turn if 6 or capture!
+    if (dice === 6 || captured) {
+      st.diceValue = null;
+      st.hasRolled = false;
+      st.movableTokenIds = [];
+      st.lastActionText += ' (نوبت جایزه!)';
+      io.to(roomId).emit('game_update', {
+        gameState: st,
+        winner: room.winner,
+        status: room.status,
+      });
+
+      if (curSlot.isAi) {
+        handleLudoBotTurn(roomId);
+      }
+    } else {
+      advanceLudoTurn(roomId);
+    }
+  }
+
+  socket.on('ludo_roll_dice', () => {
+    const roomId = (socket as any).roomId;
+    const playerNum = (socket as any).playerNum;
+    const room = rooms[roomId];
+    if (!room || room.status !== 'playing') return;
+    const st = room.gameState as LudoState;
+
+    if (st.currentTurn !== playerNum || st.hasRolled) return;
+
+    const dice = Math.floor(Math.random() * 6) + 1;
+    st.diceValue = dice;
+    st.hasRolled = true;
+
+    const curSlot = st.players[playerNum];
+    const movables: number[] = [];
+    curSlot.tokens.forEach((t) => {
+      if (t.step === -1 && dice === 6) movables.push(t.id);
+      else if (t.step >= 0 && t.step + dice <= 56) movables.push(t.id);
+    });
+    st.movableTokenIds = movables;
+
+    if (movables.length === 0) {
+      st.lastActionText = `${curSlot.name} عدد ${dice} آورد؛ حرکت مقدوری نیست!`;
+      io.to(roomId).emit('game_update', {
+        gameState: st,
+        winner: room.winner,
+        status: room.status,
+      });
+
+      setTimeout(() => {
+        advanceLudoTurn(roomId);
+      }, 1000);
+      return;
+    }
+
+    st.lastActionText = `${curSlot.name} عدد ${dice} آورد. مهره را انتخاب کنید.`;
+    io.to(roomId).emit('game_update', {
+      gameState: st,
+      winner: room.winner,
+      status: room.status,
+    });
+  });
+
+  socket.on('ludo_move_token', (data: { tokenId: number }) => {
+    const roomId = (socket as any).roomId;
+    const playerNum = (socket as any).playerNum;
+    const room = rooms[roomId];
+    if (!room || room.status !== 'playing') return;
+    const st = room.gameState as LudoState;
+
+    if (st.currentTurn !== playerNum || !st.hasRolled) return;
+    if (!st.movableTokenIds.includes(data.tokenId)) return;
+
+    executeLudoMove(roomId, data.tokenId);
   });
 
   // Disconnect

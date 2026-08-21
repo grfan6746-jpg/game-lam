@@ -1,6 +1,6 @@
 {
   "name": "Local Game Server (Termux LAN)",
-  "description": "8-in-1 Real-Time 2-Player LAN Game Server for Termux Android and Web browsers with WebSocket rooms.",
+  "description": "10-in-1 Real-Time LAN Game Server for Termux Android and Web browsers featuring Chess, Ludo (Manch), Battleship, Pong, Snake, Racing, Fighting, and classic turn-based games.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
